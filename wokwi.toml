@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = 'build/Semaforo_Temporizador.hex'
+elf = 'build/Semaforo_Temporizador.elf'
