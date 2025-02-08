@@ -16,25 +16,28 @@
 #define endereco 0x3C                       // Endereço I2C do display OLED
 #define LED_PIN 7                           // Pino GPIO conectado a matriz de LEDs
 #define LED_COUNT 25                        // Número de LEDs na matriz
+#define UART_ID uart0                       // Seleciona a UART0
+#define BAUD_RATE 115200                    // Define a taxa de transmissão
+#define UART_TX_PIN 0                       // Pino GPIO usado para TX
+#define UART_RX_PIN 1                       // Pino GPIO usado para RX
 
-
-const uint LED_VERDE = 11;                  // Define o pino GPIO 11 para controlar o LED.
-const uint LED_AZUL = 12;                   // Define o pino GPIO 12 para controlar o LED.
-const uint LED_VERMELHO = 13;               // Define o pino GPIO 13 para controlar o LED.
-const uint button_A = 5;                    // Define o pino GPIO 5 para ler o estado do botão.
+const uint LED_VERDE = 11;                  // Define o pino GPIO 11 para controlar a cor verde do LED RGB.
+const uint LED_AZUL = 12;                   // Define o pino GPIO 12 para controlar a cor azul do LED RGB.
+const uint LED_VERMELHO = 13;               // Define o pino GPIO 13 para controlar a cor vermelha do LED RGB.
+const uint button_A = 5;                    // GPIO do botão A.
 const uint button_B = 6;                    // GPIO do botão B
+const uint button_joy = 22;                 // GPIO do botão joystick.
 
 
 bool led_on = false;                        // Variável global para armazenar o estado do LED (não utilizada neste código).
 bool led_active = false;                    // Indica se o LED está atualmente aceso (para evitar múltiplas ativações).
 absolute_time_t turn_off_time;              // Variável para armazenar o tempo em que o LED deve ser desligado (não utilizada neste código).
 static volatile uint32_t last_time = 0;     // Armazena o tempo do último evento (em microssegundos)
+static volatile bool flag_button = 0;       // Armazena o estado do botão
 int led_state = 0;                          // Armazena o estado atual do LED
 uint32_t elapsed_time = 0;                  // Armazena o tempo decorrido em segundos
 int tempo = 0;                              // Armazena o tempo programado para desligar o LED
-static int32_t set_button = 0;              // Controlador de seleção das animações
-
-
+static int32_t set_button = 0;              // Controlador de seleção das frases
 
 typedef struct pixel_t pixel_t;             // Alias para a estrutura pixel_t
 typedef pixel_t npLED_t;                    // Alias para facilitar o uso no contexto de LEDs
@@ -210,40 +213,246 @@ void animation_number_ara(int number){
 
 }
 
-// Função de callback para desligar o LED após o tempo programado.
-int64_t turn_off_callback(alarm_id_t id, void *user_data) {
+// Função para imprimir a animação das letras maiúsculas
+void animation_letter(char letter) {
+    // Lista das letras maiúsculas
+    int letter_A[5][5][3] = { // A
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_B[5][5][3] = { // B
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_C[5][5][3] = { // C
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_D[5][5][3] = { // D
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_E[5][5][3] = { // E
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_F[5][5][3] = { // F
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_G[5][5][3] = { // G
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_H[5][5][3] = { // H
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_I[5][5][3] = { // I
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_J[5][5][3] = { // J
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_K[5][5][3] = { // K
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_L[5][5][3] = { // L
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_M[5][5][3] = { // M
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},}
+                };
+    int letter_N[5][5][3] = { // N
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},}
+                };
+    int letter_O[5][5][3] = { // O
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_P[5][5][3] = { // P
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_Q[5][5][3] = { // Q
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0},}
+                };
+    int letter_R[5][5][3] = { // R
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_S[5][5][3] = { // S
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_T[5][5][3] = { // T
+                {{55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_U[5][5][3] = { // U
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
+                };
+    int letter_V[5][5][3] = { // V
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_W[5][5][3] = { // W
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}},
+                {{55, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {55, 0, 0},}
+                };
+    int letter_X[5][5][3] = { // X
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},}
+                };
+    int letter_Y[5][5][3] = { // Y
+                {{55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0},}
+                };
+    int letter_Z[5][5][3] = { // Z
+                {{55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+                {{55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0},}
+                };
 
-    // Desliga o LED com base no estado atual.
-    switch (led_state)
-    {
-    case 2:
-        gpio_put(LED_VERDE, false);
-        led_state--;
-        printf("LED Verde desligado\n");
-        break;
-    case 1:
-        gpio_put(LED_AZUL, false);
-        led_state--;
-        printf("LED Azul desligado\n");
-        break;
-    case 0:
-        gpio_put(LED_VERMELHO, false);
-        led_active = false;
-        printf("LED Vermelho desligado\n");
-        printf("Fim do processo de contagem\n");
-        return 0;
+    // Seleciona a letra correta com base no caractere recebido
+    switch(letter) {
+        case 'A': case 'a': print_frame(letter_A); break;
+        case 'B': case 'b': print_frame(letter_B); break;
+        case 'C': case 'c': print_frame(letter_C); break;
+        case 'D': case 'd': print_frame(letter_D); break;
+        case 'E': case 'e': print_frame(letter_E); break;
+        case 'F': case 'f': print_frame(letter_F); break;
+        case 'G': case 'g': print_frame(letter_G); break;
+        case 'H': case 'h': print_frame(letter_H); break;
+        case 'I': case 'i': print_frame(letter_I); break;
+        case 'J': case 'j': print_frame(letter_J); break;
+        case 'K': case 'k': print_frame(letter_K); break;
+        case 'L': case 'l': print_frame(letter_L); break;
+        case 'M': case 'm': print_frame(letter_M); break;
+        case 'N': case 'n': print_frame(letter_N); break;
+        case 'O': case 'o': print_frame(letter_O); break;
+        case 'P': case 'p': print_frame(letter_P); break;
+        case 'Q': case 'q': print_frame(letter_Q); break;
+        case 'R': case 'r': print_frame(letter_R); break;
+        case 'S': case 's': print_frame(letter_S); break;
+        case 'T': case 't': print_frame(letter_T); break;
+        case 'U': case 'u': print_frame(letter_U); break;
+        case 'V': case 'v': print_frame(letter_V); break;
+        case 'W': case 'w': print_frame(letter_W); break;
+        case 'X': case 'x': print_frame(letter_X); break;
+        case 'Y': case 'y': print_frame(letter_Y); break;
+        case 'Z': case 'z': print_frame(letter_Z); break;    
     }
+}
 
-    tempo = 0;       // Reseta o tempo decorrido
-    // Agenda um novo alarme para desligar o próximo LED após 3 segundo (3000 ms).
-    add_alarm_in_ms(3000, turn_off_callback, NULL, false);
-    // Retorna 0 para indicar que o alarme não deve se repetir.
-    return 0;
+// Função de .
+bool repeating_timer_callback(struct repeating_timer *t)  {
+    
+    bool cor = true;
+    ssd1306_t ssd; // Inicializa a estrutura do display
+    
+    // Desliga o LED com base no estado atual.
+    ssd1306_fill(&ssd, !cor);                                           // Limpa o display
+    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                       // Desenha um retângulo
+    ssd1306_draw_string(&ssd, "Tarefa   U4C6", 8, 10);                  // Desenha uma string
+    ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30);                   // Desenha uma string
+    ssd1306_draw_string(&ssd, "Werliarlinson", 15, 48);                 // Desenha uma string      
+    ssd1306_send_data(&ssd);                                            // Atualiza o display
+
+    // Retorna true para manter o temporizador repetindo. Se retornar false, o temporizador para.
+    return 1;
 }
 
 // Função para lidar com a interrupção dos botões
 void gpio_irq_handler(uint gpio, uint32_t events) {
     
+    flag_button = true;                                         // Ativa a flag para ignorar o botão
+
     uint32_t current_time = to_us_since_boot(get_absolute_time());      // Obter o tempo atual em microssegundos
 
     if(current_time - last_time > 300000) {                             // Ignorar eventos muito próximos
@@ -251,16 +460,15 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
         last_time = current_time;
         
         if (gpio == button_B) {                                         // Avança para a próxima combinação
-            set_button++;
-            if(set_button > 9){
-                set_button = 9;
-            } 
+            gpio_put(LED_AZUL, !gpio_get(LED_AZUL));                    // Inverte o estado do LED azul
+            set_button = 2;
         } 
         if (gpio == button_A) {                                         // Retrocede para a combinação anterior
-            set_button--;
-            if(set_button < 0){
-                set_button = 0;
-            }
+            gpio_put(LED_VERDE, !gpio_get(LED_VERDE));                  // Inverte o estado do LED verde
+            set_button = 1;
+        }
+        if (gpio == button_joy) {                                       // Reinicia o processo de contagem
+            gpio_put(LED_VERMELHO, !gpio_get(LED_VERMELHO));            // Inverte o estado do LED vermelho
         }
     
     }
@@ -268,24 +476,30 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
 }
 
 int main() {
+    
     // Inicializa a comunicação serial para permitir o uso de printf.
     stdio_init_all();
 
-    // I2C Initialisation. Using it at 400Khz.
+    uart_init(UART_ID, BAUD_RATE);                                      // Inicializa a UART
+    // Inicializa o display OLED
     i2c_init(I2C_PORT, 400 * 1000);
 
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-    gpio_pull_up(I2C_SDA); // Pull up the data line
-    gpio_pull_up(I2C_SCL); // Pull up the clock line
-    ssd1306_t ssd; // Inicializa a estrutura do display
-    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
-    ssd1306_config(&ssd); // Configura o display
-    ssd1306_send_data(&ssd); // Envia os dados para o display
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);                          // Seta a função do pino GPIO para I2C
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);                          
+    gpio_pull_up(I2C_SDA);                                              // Estabelece o pull-up na linha de dados
+    gpio_pull_up(I2C_SCL);                                              // Estabelece o pull-up na linha de clock
+    ssd1306_t ssd;                                                      // Inicializa a estrutura do display
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);       // Inicializa o display
+    ssd1306_config(&ssd);                                               // Configura o display
+    ssd1306_send_data(&ssd);                                            // Envia os dados para o display
 
     // Limpa o display. O display inicia com todos os pixels apagados.
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
+
+    // Configura os pinos GPIO para a UART
+    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);                     // Configura o pino 0 para TX
+    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);                     // Configura o pino 1 para RX
 
     // Configura os pinos para o LED RGB (11, 12 e 13) como saída digital.
     gpio_init(LED_AZUL);
@@ -306,60 +520,78 @@ int main() {
     gpio_pull_up(button_A);
     gpio_pull_up(button_B);   
 
-    npInit(LED_PIN);                                      // Inicializar os LEDs
-    npClear();                                            // Apagar todos os LEDs
-    npWrite();                                            // Atualizar os LEDs no hardware
+    npInit(LED_PIN);                                                    // Inicializar os LEDs
+    npClear();                                                          // Apagar todos os LEDs
+    npWrite();                                                          // Atualizar os LEDs no hardware
+    
+    // Mensagem inicial
+    const char *init_message = "Digite algo e veja o que acontece:\r\n";
+    uart_puts(UART_ID, init_message);
+
+    //Configuração da interrupção do botão A
+    gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão A
+    //Configuração da interrupção do botão B
+    gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão B
+    //Configuração da interrupção do botão joystick
+    gpio_set_irq_enabled_with_callback(button_joy, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão joystick
+    
+    struct repeating_timer timer;                                           // Estrutura para armazenar o temporizador repetitivo
+    //add_repeating_timer_ms(5000, repeating_timer_callback, NULL, &timer);   // Adiciona um temporizador repetitivo de 5 segundo
 
     bool cor = true;
 
     // Loop principal do programa que verifica continuamente o estado do botão.
     while (true) {
         
-        uint32_t current_time = to_us_since_boot(get_absolute_time());      // Obter o tempo atual em microssegundos
-
         cor = !cor;
-        // Atualiza o conteúdo do display com animações
-        ssd1306_fill(&ssd, !cor); // Limpa o display
-        ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
-        ssd1306_draw_string(&ssd, "Cepedi   TIC37", 8, 10); // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30); // Desenha uma string
-        ssd1306_draw_string(&ssd, "Prof Wilton", 15, 48); // Desenha uma string      
-        ssd1306_send_data(&ssd); // Atualiza o display
-
-        // Verifica se o botão foi pressionado (nível baixo no pino) e se o LED não está ativo.
-        if (gpio_get(button_A) == 0 && !led_active) {
+        
+        if(flag_button) {                                                   // Evento para verificar o botão foi acionado
+            flag_button = false;                                            // Reseta a flag
+                // Verifica se o botão foi pressionado (nível baixo no pino) para emissão da mensagem.
+                if (set_button == 1) {
+                    uart_puts(UART_ID,"Estado do LED Verde alterado!\r\n");                        // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 15, 25);          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Verde alterado!", 5, 35);          // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                }
+                if (set_button == 2) {
+                    uart_puts(UART_ID,"Estado do LED Azul alterado!\r\n");                         // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 15, 25);          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Azul alterado!", 10, 35);          // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display 
+                }
+            set_button = 0;                                                                 // Reseta o valor do botão
+        }    
+        
+        // Verifica se há dados disponíveis para leitura
+        if (uart_is_readable(UART_ID)) {
             
-            if(current_time - last_time > 300000) {                             // Evento para ignorar o debounce do botão
-       
-                last_time = current_time;
-                elapsed_time = current_time;
-
-                // Liga os LEDs configurando os pinos para nível alto.
-                gpio_put(LED_AZUL, true);
-                gpio_put(LED_VERDE, true);
-                gpio_put(LED_VERMELHO, true);
-
-                // Define 'led_active' como true para indicar que o LED está aceso.
-                led_active = true;
-                led_state = 2;
-                tempo = 0;
-                // Agenda um alarme para desligar o LED após 3 segundos (3000 ms).
-                // A função 'turn_off_callback' será chamada após esse tempo.
-                add_alarm_in_ms(3000, turn_off_callback, NULL, false);
-                printf("Botão pressionado\n");
-                printf("Começa o processo de contagem\n");
-                //Implementação do temporizador dentro da função pois ele só iria reagir no proximo segundo apenas
-                tempo++;
-                printf("Tempo decorrido: %d segundos\n", tempo);
+            // Lê um caractere da UART
+            char c = uart_getc(UART_ID);
+            // Verifica se o caractere é um número
+            if (isdigit(c)) {
+                int number = c - '0';                                           // Converte o caractere para um número inteiro
+                animation_number_ara(number);                                   // Chama a animação do número
+            } else if (isalpha(c)) {                                            // Verifica se o caractere é uma letra
+                animation_letter(c);                                            // Chama a animação da letra
+            } else {
+                uart_puts(UART_ID, "Caractere não suportado\n");                // Envia uma mensagem de erro
+                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                ssd1306_draw_string(&ssd, "Caractere não suportado!", 20, 30);   // Desenha uma string
+                ssd1306_send_data(&ssd);                                        // Atualiza o display
             }
+            // Envia de volta o caractere lido (eco)
+            uart_putc(UART_ID, c);
 
+            // Envia uma mensagem adicional para cada caractere recebido
+            uart_puts(UART_ID, " <- Eco do RP2\r\n");
         }
         
-        if (current_time - elapsed_time >= 1000000 && led_active) {             // Evento para contar o tempo decorrido
-            elapsed_time += 1000000;                                            //Atualiza o tempo do último segundo contado
-            tempo++;
-            printf("Tempo decorrido: %d segundos\n", tempo);
-        }
         // Introduz uma pequena pausa de 10 ms para reduzir o uso da CPU.
         // Isso evita que o loop seja executado muito rapidamente e consuma recursos desnecessários.
         sleep_ms(10);

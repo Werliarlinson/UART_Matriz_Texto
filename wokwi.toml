@@ -1,4 +1,4 @@
 [wokwi]
 version = 1
-firmware = 'build/Semaforo_Temporizador.hex'
-elf = 'build/Semaforo_Temporizador.elf'
+firmware = 'build/UART_Matriz_Texto.uf2'
+elf = 'build/UART_Matriz_Texto.elf'
