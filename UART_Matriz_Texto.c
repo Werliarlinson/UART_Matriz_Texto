@@ -8,6 +8,7 @@
 #include "hardware/pio.h"                   // Biblioteca para manipulação de periféricos PIO
 #include "ws2818b.pio.h"                    // Programa para controle de LEDs WS2812B
 #include "hardware/clocks.h"                // Biblioteca para controle de relógios do hardware
+#include "ctype.h"                          // Biblioteca para manipulação de caracteres
 
 
 #define I2C_PORT i2c1
@@ -26,18 +27,12 @@ const uint LED_AZUL = 12;                   // Define o pino GPIO 12 para contro
 const uint LED_VERMELHO = 13;               // Define o pino GPIO 13 para controlar a cor vermelha do LED RGB.
 const uint button_A = 5;                    // GPIO do botão A.
 const uint button_B = 6;                    // GPIO do botão B
-const uint button_joy = 22;                 // GPIO do botão joystick.
 
-
-bool led_on = false;                        // Variável global para armazenar o estado do LED (não utilizada neste código).
-bool led_active = false;                    // Indica se o LED está atualmente aceso (para evitar múltiplas ativações).
-absolute_time_t turn_off_time;              // Variável para armazenar o tempo em que o LED deve ser desligado (não utilizada neste código).
 static volatile uint32_t last_time = 0;     // Armazena o tempo do último evento (em microssegundos)
 static volatile bool flag_button = 0;       // Armazena o estado do botão
-int led_state = 0;                          // Armazena o estado atual do LED
-uint32_t elapsed_time = 0;                  // Armazena o tempo decorrido em segundos
-int tempo = 0;                              // Armazena o tempo programado para desligar o LED
+uint32_t elapsed_time = 10000;              // Armazena o tempo decorrido em microsegundos (Padrão: 10s)
 static int32_t set_button = 0;              // Controlador de seleção das frases
+alarm_id_t alarm_id = 0;                    // Variável global para armazenar o ID do alarme
 
 typedef struct pixel_t pixel_t;             // Alias para a estrutura pixel_t
 typedef pixel_t npLED_t;                    // Alias para facilitar o uso no contexto de LEDs
@@ -87,26 +82,26 @@ void npInit(uint pin)
 // Função para definir a cor de um LED específico
 void npSetLED(const uint index, const uint8_t r, const uint8_t g, const uint8_t b) 
 {
-    leds[index].R = r;                                    // Definir componente vermelho
-    leds[index].G = g;                                    // Definir componente verde
-    leds[index].B = b;                                    // Definir componente azul
+    leds[index].R = r;                                          // Definir componente vermelho
+    leds[index].G = g;                                          // Definir componente verde
+    leds[index].B = b;                                          // Definir componente azul
 }
 
 // Função para limpar (apagar) todos os LEDs
 void npClear() 
 {
-    for (uint i = 0; i < LED_COUNT; ++i)                  // Iterar sobre todos os LEDs
-        npSetLED(i, 0, 0, 0);                             // Definir cor como preta (apagado)
+    for (uint i = 0; i < LED_COUNT; ++i)                        // Iterar sobre todos os LEDs
+        npSetLED(i, 0, 0, 0);                                   // Definir cor como preta (apagado)
 }
 
 // Função para atualizar os LEDs no hardware
 void npWrite() 
 {
-    for (uint i = 0; i < LED_COUNT; ++i)                      // Iterar sobre todos os LEDs
+    for (uint i = 0; i < LED_COUNT; ++i)                        // Iterar sobre todos os LEDs
     {
-        pio_sm_put_blocking(np_pio, sm, leds[i].G<<24);       // Enviar componente verde
-        pio_sm_put_blocking(np_pio, sm, leds[i].R<<24);       // Enviar componente vermelho
-        pio_sm_put_blocking(np_pio, sm, leds[i].B<<24);       // Enviar componente azul
+        pio_sm_put_blocking(np_pio, sm, leds[i].G<<24);         // Enviar componente verde
+        pio_sm_put_blocking(np_pio, sm, leds[i].R<<24);         // Enviar componente vermelho
+        pio_sm_put_blocking(np_pio, sm, leds[i].B<<24);         // Enviar componente azul
     }
 }
 
@@ -430,28 +425,10 @@ void animation_letter(char letter) {
     }
 }
 
-// Função de .
-bool repeating_timer_callback(struct repeating_timer *t)  {
-    
-    bool cor = true;
-    ssd1306_t ssd; // Inicializa a estrutura do display
-    
-    // Desliga o LED com base no estado atual.
-    ssd1306_fill(&ssd, !cor);                                           // Limpa o display
-    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                       // Desenha um retângulo
-    ssd1306_draw_string(&ssd, "Tarefa   U4C6", 8, 10);                  // Desenha uma string
-    ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30);                   // Desenha uma string
-    ssd1306_draw_string(&ssd, "Werliarlinson", 15, 48);                 // Desenha uma string      
-    ssd1306_send_data(&ssd);                                            // Atualiza o display
-
-    // Retorna true para manter o temporizador repetindo. Se retornar false, o temporizador para.
-    return 1;
-}
-
 // Função para lidar com a interrupção dos botões
 void gpio_irq_handler(uint gpio, uint32_t events) {
     
-    flag_button = true;                                         // Ativa a flag para ignorar o botão
+    flag_button = true;                                                 // Ativa a flag para ignorar o botão
 
     uint32_t current_time = to_us_since_boot(get_absolute_time());      // Obter o tempo atual em microssegundos
 
@@ -467,12 +444,34 @@ void gpio_irq_handler(uint gpio, uint32_t events) {
             gpio_put(LED_VERDE, !gpio_get(LED_VERDE));                  // Inverte o estado do LED verde
             set_button = 1;
         }
-        if (gpio == button_joy) {                                       // Reinicia o processo de contagem
-            gpio_put(LED_VERMELHO, !gpio_get(LED_VERMELHO));            // Inverte o estado do LED vermelho
-        }
-    
     }
+}
 
+// Função de resetar as mensagens já escritas em tela para a configuração padrão.
+int64_t turn_off_callback(alarm_id_t id, void *user_data) {
+    
+    bool cor = true;
+    ssd1306_t ssd; // Inicializa a estrutura do display
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);       // Inicializa o display
+    ssd1306_config(&ssd);                                               // Configura o display
+    ssd1306_send_data(&ssd);                                            // Envia os dados para o display
+
+    // Sequência de escape ANSI para limpar a tela do terminal
+    const char *clear_screen = "\033[2J\033[H";
+    uart_puts(UART_ID, clear_screen);
+
+    // Mensagem inicial
+    const char *init_message = "Digite algo e veja o que acontece:\r\n";
+    uart_puts(UART_ID, init_message);
+    ssd1306_fill(&ssd, !cor);                                           // Limpa o display
+    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                       // Desenha um retângulo
+    ssd1306_draw_string(&ssd, "Tarefa \t\t U4C6", 8, 10);               // Desenha uma string
+    ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30);                   // Desenha uma string
+    ssd1306_draw_string(&ssd, "Werliarlinson", 14, 48);                 // Desenha uma string      
+    ssd1306_send_data(&ssd);                                            // Atualiza o display
+    
+    // Retorna 0 para indicar que o alarme não deve se repetir.
+    return 0;
 }
 
 int main() {
@@ -481,8 +480,8 @@ int main() {
     stdio_init_all();
 
     uart_init(UART_ID, BAUD_RATE);                                      // Inicializa a UART
-    // Inicializa o display OLED
-    i2c_init(I2C_PORT, 400 * 1000);
+    
+    i2c_init(I2C_PORT, 400 * 1000);                                     // Inicializa o display OLED
 
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);                          // Seta a função do pino GPIO para I2C
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);                          
@@ -513,83 +512,94 @@ int main() {
     gpio_init(button_A);
     gpio_set_dir(button_A, GPIO_IN);
     gpio_init(button_B);                                  
-    gpio_set_dir(button_B, GPIO_IN);                      
+    gpio_set_dir(button_B, GPIO_IN);
     
     // Habilita o resistor pull-up interno para o pino do botão.
     // Isso garante que o pino seja lido como alto (3,3 V) quando o botão não está pressionado.
     gpio_pull_up(button_A);
-    gpio_pull_up(button_B);   
+    gpio_pull_up(button_B);
 
     npInit(LED_PIN);                                                    // Inicializar os LEDs
     npClear();                                                          // Apagar todos os LEDs
     npWrite();                                                          // Atualizar os LEDs no hardware
-    
-    // Mensagem inicial
-    const char *init_message = "Digite algo e veja o que acontece:\r\n";
-    uart_puts(UART_ID, init_message);
 
     //Configuração da interrupção do botão A
-    gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão A
+    gpio_set_irq_enabled_with_callback(button_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);   // Habilitar interrupção no botão A
     //Configuração da interrupção do botão B
-    gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão B
-    //Configuração da interrupção do botão joystick
-    gpio_set_irq_enabled_with_callback(button_joy, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler); // Habilitar interrupção no botão joystick
+    gpio_set_irq_enabled_with_callback(button_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);   // Habilitar interrupção no botão B
     
-    struct repeating_timer timer;                                           // Estrutura para armazenar o temporizador repetitivo
-    //add_repeating_timer_ms(5000, repeating_timer_callback, NULL, &timer);   // Adiciona um temporizador repetitivo de 5 segundo
-
     bool cor = true;
+
+    add_alarm_in_ms(10, turn_off_callback, NULL, false);                // Aciona para começar a mensagem padrão
 
     // Loop principal do programa que verifica continuamente o estado do botão.
     while (true) {
         
         cor = !cor;
         
-        if(flag_button) {                                                   // Evento para verificar o botão foi acionado
-            flag_button = false;                                            // Reseta a flag
-                // Verifica se o botão foi pressionado (nível baixo no pino) para emissão da mensagem.
-                if (set_button == 1) {
-                    uart_puts(UART_ID,"Estado do LED Verde alterado!\r\n");                        // Imprime uma mensagem no terminal
-                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
-                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
-                    ssd1306_draw_string(&ssd, "Estado do LED", 15, 25);          // Desenha uma string
-                    ssd1306_draw_string(&ssd, "Verde alterado!", 5, 35);          // Desenha uma string
-                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
-                }
-                if (set_button == 2) {
-                    uart_puts(UART_ID,"Estado do LED Azul alterado!\r\n");                         // Imprime uma mensagem no terminal
-                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
-                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
-                    ssd1306_draw_string(&ssd, "Estado do LED", 15, 25);          // Desenha uma string
-                    ssd1306_draw_string(&ssd, "Azul alterado!", 10, 35);          // Desenha uma string
-                    ssd1306_send_data(&ssd);                                                     // Atualiza o display 
-                }
-            set_button = 0;                                                                 // Reseta o valor do botão
+        if(flag_button) {                                                                    // Evento para verificar o botão foi acionado
+            flag_button = false;                                                             // Reseta a flag
+            // Verifica se o botão foi pressionado (nível baixo no pino) para emissão da mensagem.
+            if (set_button == 1) {
+                uart_puts(UART_ID,"Estado do LED Verde alterado!\r\n");                      // Imprime uma mensagem no terminal
+                ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                ssd1306_draw_string(&ssd, "Verde alterado!", 5, 35);                         // Desenha uma string
+                ssd1306_send_data(&ssd);                                                     // Atualiza o display
+            }
+            if (set_button == 2) {
+                uart_puts(UART_ID,"Estado do LED Azul alterado!\r\n");                       // Imprime uma mensagem no terminal
+                ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                ssd1306_draw_string(&ssd, "Azul alterado!", 10, 35);                         // Desenha uma string
+                ssd1306_send_data(&ssd);                                                     // Atualiza o display 
+            }
+            set_button = 0;                                                                  // Reseta o valor do botão
+            // Reseta o tempo de espera para a mensagem padrão
+            cancel_alarm(alarm_id);
+            // Timeout atingido, reseta a mensagem padrão
+            alarm_id = add_alarm_in_ms(elapsed_time, turn_off_callback, NULL, false);
         }    
         
         // Verifica se há dados disponíveis para leitura
         if (uart_is_readable(UART_ID)) {
-            
             // Lê um caractere da UART
-            char c = uart_getc(UART_ID);
+            int c = uart_getc(UART_ID);                                         // Lê um caractere da UART
             // Verifica se o caractere é um número
             if (isdigit(c)) {
                 int number = c - '0';                                           // Converte o caractere para um número inteiro
                 animation_number_ara(number);                                   // Chama a animação do número
-            } else if (isalpha(c)) {                                            // Verifica se o caractere é uma letra
-                animation_letter(c);                                            // Chama a animação da letra
-            } else {
-                uart_puts(UART_ID, "Caractere não suportado\n");                // Envia uma mensagem de erro
                 ssd1306_fill(&ssd, !cor);                                       // Limpa o display
                 ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Caractere não suportado!", 20, 30);   // Desenha uma string
+                ssd1306_draw_string(&ssd, "Numero ", 20, 30);                   // Desenha uma string
+                ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
+                ssd1306_send_data(&ssd);                                        // Atualiza o display
+            } else if (isalpha(c)) {                                            // Verifica se o caractere é uma letra
+                animation_letter(c);                                            // Chama a animação da letra
+                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                ssd1306_draw_string(&ssd, "Caractere ", 20, 30);                // Desenha uma string
+                ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
+                ssd1306_send_data(&ssd);                                        // Atualiza o display
+            } else {
+                uart_puts(UART_ID, "Caractere não suportado: ");                // Envia uma mensagem de erro
+                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                ssd1306_draw_string(&ssd, "Caractere nao", 12, 25);  // Desenha uma string
+                ssd1306_draw_string(&ssd, "suportado!", 25, 35);  // Desenha uma string
+
                 ssd1306_send_data(&ssd);                                        // Atualiza o display
             }
             // Envia de volta o caractere lido (eco)
             uart_putc(UART_ID, c);
-
             // Envia uma mensagem adicional para cada caractere recebido
             uart_puts(UART_ID, " <- Eco do RP2\r\n");
+            // Reseta o tempo de espera para a mensagem padrão
+            cancel_alarm(alarm_id);
+            // Timeout atingido, reseta a mensagem padrão
+            alarm_id = add_alarm_in_ms(elapsed_time, turn_off_callback, NULL, false);
         }
         
         // Introduz uma pequena pausa de 10 ms para reduzir o uso da CPU.

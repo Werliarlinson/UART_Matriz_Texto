@@ -21,15 +21,16 @@ Após instalá-las basta buildar o projeto pelo CMake. A partir daí, abra o arq
 diagram.json e clique no botão verde para iniciar a simulação.
 
 Enquanto na simulação, o usuário pode clicar nos botões dispostos na simulação
-a fim de acender as luzes conectadas à placa.
+a fim de acender os leds conectados à placa.
 
-O botão preto incrementa o número na matriz de led até o limite do nº 9
+O botão azul irá acionar o led azul e em decorrencia desse eveto irá emitir uma imagem na tela e terminal
 
-O botão verde decrementa o número na matriz de led até o limite do nº 0
+O botão verde irá acionar o led verde e em decorrencia desse eveto irá emitir uma imagem na tela e terminal
 
-O botão azul mudará o tipo de numeração da placa alternando entre os números arábicos e poligonos
+Digitando um caractere alfanumérico no terminal irá ligar os Leds da Matriz WS2812B de maneira correspondente ao simbolo
+Como também irá exibir uma mensagem no terminal e na tela SSD1306
 
-Os botões operam por interrupção enquanto o led vermelho pisca incessantemente em loop
+Os botões operam por interrupção e a tela irá resetar por meio de um temporizador que se adequa a atividade
 
 # Vídeo demonstrativo
 
