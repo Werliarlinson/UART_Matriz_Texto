@@ -1,5 +1,6 @@
 #include <stdio.h>                          // Biblioteca padrão do C.
 #include <string.h>                         // Biblioteca padrão do C para manipulação de strings.
+#include <ctype.h>                          // Biblioteca para manipulação de caracteres
 #include "pico/stdlib.h"                    // Biblioteca padrão do Raspberry Pi Pico para controle de GPIO, temporização e comunicação serial.
 #include "pico/time.h"                      // Biblioteca para gerenciamento de temporizadores e alarmes.
 #include "hardware/i2c.h"                   // Biblioteca para comunicação I2C.
@@ -8,7 +9,6 @@
 #include "hardware/pio.h"                   // Biblioteca para manipulação de periféricos PIO
 #include "ws2818b.pio.h"                    // Programa para controle de LEDs WS2812B
 #include "hardware/clocks.h"                // Biblioteca para controle de relógios do hardware
-#include "ctype.h"                          // Biblioteca para manipulação de caracteres
 
 
 #define I2C_PORT i2c1
@@ -17,10 +17,10 @@
 #define endereco 0x3C                       // Endereço I2C do display OLED
 #define LED_PIN 7                           // Pino GPIO conectado a matriz de LEDs
 #define LED_COUNT 25                        // Número de LEDs na matriz
-#define UART_ID uart0                       // Seleciona a UART0
-#define BAUD_RATE 115200                    // Define a taxa de transmissão
-#define UART_TX_PIN 0                       // Pino GPIO usado para TX
-#define UART_RX_PIN 1                       // Pino GPIO usado para RX
+//#define UART_ID uart0                       // Seleciona a UART0
+//#define BAUD_RATE 115200                    // Define a taxa de transmissão
+//#define UART_TX_PIN 0                       // Pino GPIO usado para TX
+//#define UART_RX_PIN 1                       // Pino GPIO usado para RX
 
 const uint LED_VERDE = 11;                  // Define o pino GPIO 11 para controlar a cor verde do LED RGB.
 const uint LED_AZUL = 12;                   // Define o pino GPIO 12 para controlar a cor azul do LED RGB.
@@ -186,7 +186,7 @@ void animation_number_ara(int number){
                 {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},}
                 };
     int number_0[5][5][3] = { //0
-                {{0, 0, 0}, {55, 0, 0}, {255, 0, 0}, {55, 0, 0}, {0, 0, 0},},
+                {{0, 0, 0}, {55, 0, 0}, {55, 0, 0}, {55, 0, 0}, {0, 0, 0},},
                 {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0},},
                 {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
                 {{0, 0, 0}, {55, 0, 0}, {0, 0, 0}, {55, 0, 0}, {0, 0, 0}},
@@ -458,11 +458,13 @@ int64_t turn_off_callback(alarm_id_t id, void *user_data) {
 
     // Sequência de escape ANSI para limpar a tela do terminal
     const char *clear_screen = "\033[2J\033[H";
-    uart_puts(UART_ID, clear_screen);
+    //uart_puts(UART_ID, clear_screen);
+    printf(clear_screen);
 
     // Mensagem inicial
     const char *init_message = "Digite algo e veja o que acontece:\r\n";
-    uart_puts(UART_ID, init_message);
+    //uart_puts(UART_ID, init_message);
+    printf(init_message);
     ssd1306_fill(&ssd, !cor);                                           // Limpa o display
     ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                       // Desenha um retângulo
     ssd1306_draw_string(&ssd, "Tarefa \t\t U4C6", 8, 10);               // Desenha uma string
@@ -470,6 +472,11 @@ int64_t turn_off_callback(alarm_id_t id, void *user_data) {
     ssd1306_draw_string(&ssd, "Werliarlinson", 14, 48);                 // Desenha uma string      
     ssd1306_send_data(&ssd);                                            // Atualiza o display
     
+    npClear();                                                          // Apagar todos os LEDs
+    npWrite();                                                          // Atualizar os LEDs no hardware
+
+    gpio_put(LED_VERDE, 0);                                             // Apaga o LED verde
+    gpio_put(LED_AZUL, 0);                                              // Apaga o LED azul
     // Retorna 0 para indicar que o alarme não deve se repetir.
     return 0;
 }
@@ -479,7 +486,7 @@ int main() {
     // Inicializa a comunicação serial para permitir o uso de printf.
     stdio_init_all();
 
-    uart_init(UART_ID, BAUD_RATE);                                      // Inicializa a UART
+    //uart_init(UART_ID, BAUD_RATE);                                      // Inicializa a UART
     
     i2c_init(I2C_PORT, 400 * 1000);                                     // Inicializa o display OLED
 
@@ -497,8 +504,8 @@ int main() {
     ssd1306_send_data(&ssd);
 
     // Configura os pinos GPIO para a UART
-    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);                     // Configura o pino 0 para TX
-    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);                     // Configura o pino 1 para RX
+    //gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);                     // Configura o pino 0 para TX
+    //gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);                     // Configura o pino 1 para RX
 
     // Configura os pinos para o LED RGB (11, 12 e 13) como saída digital.
     gpio_init(LED_AZUL);
@@ -541,20 +548,41 @@ int main() {
             flag_button = false;                                                             // Reseta a flag
             // Verifica se o botão foi pressionado (nível baixo no pino) para emissão da mensagem.
             if (set_button == 1) {
-                uart_puts(UART_ID,"Estado do LED Verde alterado!\r\n");                      // Imprime uma mensagem no terminal
-                ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
-                ssd1306_draw_string(&ssd, "Verde alterado!", 5, 35);                         // Desenha uma string
-                ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                //uart_puts(UART_ID,"Estado do LED Verde alterado!\r\n");                      // Imprime uma mensagem no terminal
+                if(gpio_get(LED_VERDE) == 1) {
+                    printf("Estado do LED Verde Ligado!\r\n");                                 // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Verde Ligado!", 15, 35);                         // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                } else {
+                    printf("Estado do LED Verde Desligado!\r\n");                               // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Verde Desligado", 5, 35);                       // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                }
+                
             }
             if (set_button == 2) {
-                uart_puts(UART_ID,"Estado do LED Azul alterado!\r\n");                       // Imprime uma mensagem no terminal
-                ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
-                ssd1306_draw_string(&ssd, "Azul alterado!", 10, 35);                         // Desenha uma string
-                ssd1306_send_data(&ssd);                                                     // Atualiza o display 
+                //uart_puts(UART_ID,"Estado do LED Azul alterado!\r\n");                       // Imprime uma mensagem no terminal
+                if(gpio_get(LED_AZUL) == 1) {
+                    printf("Estado do LED Azul Ligado!\r\n");                                  // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Azul Ligado!", 20, 35);                         // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                } else {
+                    printf("Estado do LED Azul Desligado!\r\n");                                // Imprime uma mensagem no terminal
+                    ssd1306_fill(&ssd, !cor);                                                    // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                                // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Estado do LED", 12, 25);                          // Desenha uma string
+                    ssd1306_draw_string(&ssd, "Azul Desligado", 9, 35);                       // Desenha uma string
+                    ssd1306_send_data(&ssd);                                                     // Atualiza o display
+                }
             }
             set_button = 0;                                                                  // Reseta o valor do botão
             // Reseta o tempo de espera para a mensagem padrão
@@ -564,44 +592,49 @@ int main() {
         }    
         
         // Verifica se há dados disponíveis para leitura
-        if (uart_is_readable(UART_ID)) {
+        if (stdio_usb_connected()) {
             // Lê um caractere da UART
-            int c = uart_getc(UART_ID);                                         // Lê um caractere da UART
-            // Verifica se o caractere é um número
-            if (isdigit(c)) {
-                int number = c - '0';                                           // Converte o caractere para um número inteiro
-                animation_number_ara(number);                                   // Chama a animação do número
-                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Numero ", 20, 30);                   // Desenha uma string
-                ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
-                ssd1306_send_data(&ssd);                                        // Atualiza o display
-            } else if (isalpha(c)) {                                            // Verifica se o caractere é uma letra
-                animation_letter(c);                                            // Chama a animação da letra
-                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Caractere ", 20, 30);                // Desenha uma string
-                ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
-                ssd1306_send_data(&ssd);                                        // Atualiza o display
-            } else {
-                uart_puts(UART_ID, "Caractere não suportado: ");                // Envia uma mensagem de erro
-                ssd1306_fill(&ssd, !cor);                                       // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
-                ssd1306_draw_string(&ssd, "Caractere nao", 12, 25);  // Desenha uma string
-                ssd1306_draw_string(&ssd, "suportado!", 25, 35);  // Desenha uma string
+            //int c = uart_getc(UART_ID);                                         // Lê um caractere da UART
+            int c = getchar_timeout_us(1); // Espera por um caractere com timeout de 1 microsegundos
+            if (c != PICO_ERROR_TIMEOUT) {
+                // Verifica se o caractere é um número
+                if (isdigit(c)) {                                                   // Verifica se o caractere é um número
+                    int number = c - '0';                                           // Converte o caractere para um número inteiro
+                    animation_number_ara(number);                                   // Chama a animação do número
+                    ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Numero ", 20, 30);                   // Desenha uma string
+                    ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
+                    ssd1306_send_data(&ssd);                                        // Atualiza o display
+                } else if (isalpha(c)) {                                            // Verifica se o caractere é uma letra
+                    animation_letter(c);                                            // Chama a animação da letra
+                    ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Caractere ", 20, 30);                // Desenha uma string
+                    ssd1306_draw_char(&ssd, c, 100, 30);                            // Desenha o caractere
+                    ssd1306_send_data(&ssd);                                        // Atualiza o display
+                } else {
+                    //uart_puts(UART_ID, "Caractere não suportado: ");                // Envia uma mensagem de erro
+                    printf("Caractere não suportado: ");                            // Envia uma mensagem de erro
+                    ssd1306_fill(&ssd, !cor);                                       // Limpa o display
+                    ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor);                   // Desenha um retângulo
+                    ssd1306_draw_string(&ssd, "Caractere nao", 12, 25);  // Desenha uma string
+                    ssd1306_draw_string(&ssd, "suportado!", 25, 35);  // Desenha uma string
 
-                ssd1306_send_data(&ssd);                                        // Atualiza o display
+                    ssd1306_send_data(&ssd);                                        // Atualiza o display
+                }
+                // Envia de volta o caractere lido (eco)
+                //uart_putc(UART_ID, c);
+                printf("%c", c);
+                // Envia uma mensagem adicional para cada caractere recebido
+                //uart_puts(UART_ID, " <- Eco do RP2\r\n");
+                printf(" <- Eco do RP2\r\n");
+                // Reseta o tempo de espera para a mensagem padrão
+                cancel_alarm(alarm_id);
+                // Timeout atingido, reseta a mensagem padrão
+                alarm_id = add_alarm_in_ms(elapsed_time, turn_off_callback, NULL, false);
             }
-            // Envia de volta o caractere lido (eco)
-            uart_putc(UART_ID, c);
-            // Envia uma mensagem adicional para cada caractere recebido
-            uart_puts(UART_ID, " <- Eco do RP2\r\n");
-            // Reseta o tempo de espera para a mensagem padrão
-            cancel_alarm(alarm_id);
-            // Timeout atingido, reseta a mensagem padrão
-            alarm_id = add_alarm_in_ms(elapsed_time, turn_off_callback, NULL, false);
         }
-        
         // Introduz uma pequena pausa de 10 ms para reduzir o uso da CPU.
         // Isso evita que o loop seja executado muito rapidamente e consuma recursos desnecessários.
         sleep_ms(10);
